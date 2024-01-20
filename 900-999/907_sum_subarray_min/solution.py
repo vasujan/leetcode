@@ -1,42 +1,30 @@
-from typing import List
-class MStack:
-
-    def __init__(self):
-        self.arr: list[list[int]] = []
-        self.sum = 0
-
-    def top(self):
-        if not self.arr:
-            return None
-        else:
-            return self.arr[-1]
-    
-    def push(self, n):
-
-        t = self.top()
-        if not t or (t and n > t[0]):
-            self.arr.append([n, 1])
-            self.sum += n
-            return
-        elif n == t[0]:
-            t[1] += 1
-            self.sum += n
-        else:
-            nn = 1
-            while self.top() and n < self.top()[0]:
-                p = self.arr.pop()
-                self.sum -= p[0] * p[1]
-                nn += p[1]
-            self.arr.append([n, nn])
-            self.sum += (n * nn)
-
-
 class Solution:
-    def sumSubarrayMins(self, arr: List[int]) -> int:
+    def sumSubarrayMins(self, arr: list[int]) -> int:
         res: int = 0
+        stack = []
+        _sum = 0
 
-        m_stack = MStack()
-        for a in arr:
-            m_stack.push(a)
-            res += m_stack.sum
+        def push(n):
+            if not stack or stack[-1][0] < n:
+                stack.append([n, 1])
+                change = n
+            elif stack[-1][0] == n:
+                stack[-1][1] += 1
+                change = n
+            else:
+                change = 0
+                nn = 1
+                while stack and n < stack[-1][0]:
+                    p = stack.pop()
+                    change -= p[0] * p[1]
+                    nn += p[1]
+                stack.append([n, nn])
+                change += n * nn
+            return change
             
+        for a in arr:
+            _sum += push(a)
+            res += _sum
+            
+        res %= 10**9 + 7
+        return res
