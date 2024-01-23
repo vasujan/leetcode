@@ -15,7 +15,9 @@ Validity:
 
 Approaching this using a stack and a lookup for brackets. On encountering the closing brackets, it will check the stack if the correct opening bracket is on top. If it isn't this is a `False`. Go on till stack is exhausted. If the string is exhausted, return `True` or continue iterating in the same manner.
 
-## Edge Cases
+Data structures: Stack, Hashmap
+
+### Edge Cases
 
 - Only the opening bracket was provided in the string, or the closing bracket was missing.
 - Closing bracket is the first in the string.
