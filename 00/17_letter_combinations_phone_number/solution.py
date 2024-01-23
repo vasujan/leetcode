@@ -19,6 +19,5 @@ class Solution:
                 return list(chars)
             return [g + c for g in given for c in chars]
 
-        digits = list(digits)
         return reduce(combine_letters, digits, [])
         

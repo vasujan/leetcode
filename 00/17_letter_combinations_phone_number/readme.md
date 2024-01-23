@@ -5,6 +5,7 @@
 ## Problem
 
 Given a string containing digits from `2-9` inclusive, return all possible letter combinations that the numbers could represent. These combinations can be returned in any order.
+
 Mapping:
 - `2`: `abc`
 - `3`: `def`
@@ -20,5 +21,6 @@ Contraints:
 
 ## Solution
 
-Since this is limited to just 4 numbers, it is simple to create $8^4 = 4096$ combinations.
+Since this is limited to just 4 numbers, it is simple to create maximum $4^4 = 2048$ combinations.
+
 The tricky part is to implement the loop to do the same. The best way is the functional `reduce` to systematically reduce the given array of numbers, even if an empty string is received.
