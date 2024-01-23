@@ -1,3 +1,5 @@
+from functools import reduce
+
 class Solution:
     def letterCombinations(self, digits: str) -> list[str]:
         mapping = {
@@ -18,7 +20,5 @@ class Solution:
             return [g + c for g in given for c in chars]
 
         digits = list(digits)
-        result = []
-        while digits:
-            result = combine_letters(result, digits.pop(0))
-        return result
+        return reduce(combine_letters, digits, [])
+        
