@@ -1,5 +1,5 @@
 .DS_Store
-/.pytest_cache
+.pytest_cache
 /notes
 __pycache__
 *.pyc
