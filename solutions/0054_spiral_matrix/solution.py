@@ -2,6 +2,23 @@ from typing import List
 
 class Solution:
     def spiralOrder(self, matrix: List[List[int]]) -> List[int]:
+        result = []
+        def spiral(matrix, m, n, r, c, dr, dc):
+            if m == 0 or n == 0: return
+
+            for i in range(n):
+                r += dr
+                c += dc
+                result.append(matrix[r][c])
+            
+            spiral(matrix, n, m - 1, r, c, dc, -dr)
+        
+        spiral(matrix, len(matrix), len(matrix[0]), 0, -1, 0, 1)
+        return result
+
+
+
+    def spiralOrder(self, matrix: List[List[int]]) -> List[int]:
         rows = len(matrix)
         cols = len(matrix[0])
         result = []
