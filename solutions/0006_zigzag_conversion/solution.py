@@ -65,15 +65,4 @@ class Solution:
                 
 
         return out
-    
-    def convert_2(self, s: str, numRows: int) -> str:
-
-        n = numRows
-        if len(s) <= n:
-            return s
-        dn = (n - 1) * 2
-        # for i in range(numRows):
-            # for j in range(i, len(s), ):
-        
-
                 
