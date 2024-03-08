@@ -1,33 +1,31 @@
+from collections import deque
+
 class Solution:
-
     def minWindow(self, s: str, t: str) -> str:
-        min_window = ""
-        chars = dict()
-        for ti in t:
-            if ti in chars:
-                chars[ti] += 1
-            else:
-                chars[ti] = 1
+        if t == "": return ""
 
-        if len(s) < len(t):
-            return min_window
-
-        for i, si in enumerate(s):
-            if si not in t:
-                continue
-            
-            t_chars = chars.copy()
-
-            j = i
-            while j < len(s):
-                if s[j] in t_chars:
-                    t_chars[s[j]] -= 1
-            
-                if sum(t_chars.values()) == 0:
-                    cur_window = s[i:j+1]
-                    if min_window != "" or len(cur_window) < len(min_window):
-                        min_window = cur_window
-                j += 1
+        countT = dict()
+        for c in t:
+            countT[c] = countT.get(c, 0) + 1
         
-        
-        return min_window
+        need = len(t)
+        res_l, res_r = -1, 10**6
+        l = 0
+        for r in range(len(s)):
+            c = s[r]
+            if c in t:
+                if countT[c] > 0: need -= 1
+                countT[c] -= 1
+
+            while not need:
+                if (r - l + 1) < (res_r - res_l + 1):
+                    res_l, res_r = l, r
+                cl = s[l]
+                if cl in t:
+                    countT[cl] += 1
+                    if countT[cl] > 0: need += 1
+                l += 1
+            
+        return s[res_l:res_r+1] if res_l > -1 else ""
+
+print(Solution().minWindow("bba", "ab"))
