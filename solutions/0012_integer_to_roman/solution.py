@@ -1,5 +1,27 @@
 class Solution:
     def intToRoman(self, num: int) -> str:
+        map = {
+            1: 'I',
+            5: 'V', 4: 'IV',
+            10: 'X', 9: 'IX',
+            50: 'L', 40: 'XL',
+            100: 'C', 90: 'XC',
+            500: 'D', 400: 'CD',
+            1000: 'M', 900: 'CM'
+        }
+
+        levels = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1]
+        
+        res = ''
+        for level in levels:
+            while level <= num:
+                res += map[level]
+                num -= level
+        
+        return res
+
+
+    def intToRoman(self, num: int) -> str:
         res = ''
         num_ = num
         def romans(rem, d_1, d_5, d_10):
