@@ -1,5 +1,30 @@
 class Solution:
     def romanToInt(self, s: str) -> int:
+        map = {
+            'I': 1,
+            'V': 5,
+            'X': 10,
+            'L': 50,
+            'C': 100,
+            'D': 500,
+            'M': 1000
+        }
+
+        level = 1000
+        res = 0
+        for char in s:
+            val = map[char]
+            if val <= level:
+                res += val
+                level = val
+            else:
+                res += val - 2 * level
+                level = val
+            
+        return res
+
+
+    def romanToInt(self, s: str) -> int:
         res = 0
         i = len(s) - 1
 
