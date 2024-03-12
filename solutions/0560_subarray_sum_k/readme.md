@@ -31,9 +31,9 @@ def subarraySum(nums, k):
 
 #### Complexity Analysis
 
-- Time complexity $O(n^2)$
+- Time complexity O(n2)O(n^2)
 
-- Space complexity $O(1)$
+- Space complexity O(1)O(1)
 
 
 ### Optimized Hash-lookup Approach
@@ -59,7 +59,7 @@ def subarraySum(nums, k):
 
 #### Complexity Analysis
 
-- Time complexity $O(n)$
+- Time complexity O(n)O(n)
 
-- Space complexity $O(n)$
+- Space complexity O(n)O(n)  
 In the worst case the `prefix_sum` can be of the same length as the input `nums`.
