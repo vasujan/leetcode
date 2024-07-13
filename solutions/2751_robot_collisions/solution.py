@@ -1,27 +1,22 @@
 class Solution:
     def survivedRobotsHealths(self, positions: List[int], healths: List[int], directions: str) -> List[int]:
-        n = len(positions)
-        robots = map(list, zip(range(n), positions, healths, directions))
-        s_robots = sorted(robots, key=lambda x: x[1])
-        print(s_robots)
+        index_map = {p: i for i, p in enumerate(positions)}
         stack = []
-        for r in s_robots:
-            if r[3] == 'L' :
-                while stack and stack[-1][3] == 'R':
-                    if stack[-1][2] < r[2]:
-                        stack.pop()
-                        r[2] -= 1
-                    elif stack[-1][2] == r[2]:
-                        stack.pop()
-                        break
-                    else:
-                        stack[-1][2] -= 1
-                        break
-                else:
-                    stack.append(r)
+        for p in sorted(positions):
+            i = index_map[p]
+            if directions[i] == 'R':
+                stack.append(i)
             else:
-                stack.append(r)
+                while stack and directions[stack[-1]] == 'R' and healths[i]:
+                    i2 = stack.pop()
+                    if healths[i2] < healths[i]:
+                        healths[i2] = 0
+                        healths[i] -= 1
+                    elif healths[i2] > healths[i]:
+                        healths[i2] -= 1
+                        healths[i] = 0
+                        stack.append(i2)
+                    else:
+                        healths[i] = healths[i2] = 0
 
-        print(stack)
-
-        return [x[2] for x in sorted(stack, key=lambda x: x[0])]
+        return [h for h in healths if h > 0]
