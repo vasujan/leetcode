@@ -28,7 +28,6 @@ s consists of lowercase English letters only.
 
 The approach is to find the longest palindromic substring in the given string `s`. This substring can be used to create a palindrome.
 
-
 #### Algorithm
 
 To solve this problem, we can use the following approach:
