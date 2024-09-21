@@ -36,23 +36,24 @@ class LeetcodeTest:
                 test_cases.append(self.test_case(inputs, outputs))
         return test_cases
 
-    def create_test_case_func(self, test_case, func):
+    @staticmethod
+    def create_test_case_func(test_case, func):
         inputs, outputs = test_case
         def test_function(self):
-            print(inputs)
             result = [func(self, *inputs)]
             self.assertEqual(result, outputs)
         return test_function
 
 
-    def parse_string(self, s: str) -> list[Any]:
+    @staticmethod
+    def parse_string(s: str) -> list[Any]:
     # create a function which takes in a string input which can either be 
     # string, integer, float and an array of these 
     # like "abc", 4, 2.4, ["asdf", 14, 15.9]
     # and returns a list of the same type 
     # like ["abc", 4, 2.4, ["asdf", 14, 15.9]]
         if s[0] == '[' and s[-1] == ']':
-            return [self.parse_string(x) for x in s[1:-1].split(',')]
+            return [LeetcodeTest.parse_string(x) for x in s[1:-1].split(',')]
         elif s[0] == '"' and s[-1] == '"':
             return s[1:-1]
         elif '.' in s:
