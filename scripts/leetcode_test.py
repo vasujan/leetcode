@@ -1,14 +1,15 @@
 from pathlib import Path
 from collections import namedtuple
-from typing import Any
+from typing import Any, List
+
 class LeetcodeTest:
     TEST_FILE_NAME = "test_cases.txt"
-    test_case = namedtuple("test_case", ["inputs", "outputs"])
+    TestCase = namedtuple("TestCase", ["inputs", "outputs"])
 
-    def __init__(self, solution_path: str):
+    def __init__(self, solution_path: Path):
         self.solution_path = solution_path
 
-    def generate_test_cases(self, file_path: Path) -> list[test_case]:
+    def generate_test_cases(self, file_path: Path) -> List[TestCase]:
         """Generate test cases from a file.
 
         The file is expected to contain input and output for each test case,
@@ -33,7 +34,7 @@ class LeetcodeTest:
                 output_line = lines[i+1].strip()
                 inputs = [self.parse_string(x) for x in input_line.split()]
                 outputs = [self.parse_string(x) for x in output_line.split()]
-                test_cases.append(self.test_case(inputs, outputs))
+                test_cases.append(self.TestCase(inputs, outputs))
         return test_cases
 
     @staticmethod
@@ -44,14 +45,13 @@ class LeetcodeTest:
             self.assertEqual(result, outputs)
         return test_function
 
-
     @staticmethod
-    def parse_string(s: str) -> list[Any]:
-    # create a function which takes in a string input which can either be 
-    # string, integer, float and an array of these 
-    # like "abc", 4, 2.4, ["asdf", 14, 15.9]
-    # and returns a list of the same type 
-    # like ["abc", 4, 2.4, ["asdf", 14, 15.9]]
+    def parse_string(s: str) -> List[Any]:
+        # Create a function which takes in a string input which can either be
+        # string, integer, float and an array of these
+        # Like "abc", 4, 2.4, ["asdf", 14, 15.9]
+        # And returns a list of the same type
+        # Like ["abc", 4, 2.4, ["asdf", 14, 15.9]]
         if s[0] == '[' and s[-1] == ']':
             return [LeetcodeTest.parse_string(x) for x in s[1:-1].split(',')]
         elif s[0] == '"' and s[-1] == '"':
@@ -62,15 +62,17 @@ class LeetcodeTest:
             return int(s)
         else:
             raise ValueError(f"Invalid input: {s}")
-    
 
     def test_file_path(self, file_name: str = None):
         if not file_name:
             file_name = self.TEST_FILE_NAME
         return self.solution_path / file_name
 
-    def add_test_cases(self, test_solution, solution, test_cases):
+    def add_test_cases(
+        self, test_solution, solution, test_cases: List[TestCase]
+    ):
         for i, test_case in enumerate(test_cases):
             func = self.create_test_case_func(test_case, solution)
             test_name = f"test_case_{i}"
             setattr(test_solution, test_name, func)
+
