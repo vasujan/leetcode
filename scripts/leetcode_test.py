@@ -60,6 +60,10 @@ class LeetcodeTest:
             return float(s)
         elif s.isdigit():
             return int(s)
+        elif s == 'null':
+            return None
+        elif s.isalpha():
+            return str(s)
         else:
             raise ValueError(f"Invalid input: {s}")
 
