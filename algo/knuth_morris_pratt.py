@@ -1,10 +1,11 @@
 #!/usr/bin/python
-from contextlib import contextmanager
-from time import perf_counter, perf_counter_ns
-from typing import Any, Generator
-
+"""
 # Knut Morris Pratt Algorithm
-# https://en.wikipedia.org/wiki/Knuth%E2%80%93Morris%E2%80%93Pratt_algorithm
+
+https://en.wikipedia.org/wiki/Knuth%E2%80%93Morris%E2%80%93Pratt_algorithm
+"""
+
+from algo.utils import timer
 
 
 def kmp_search(S: str, W: str) -> list[int]:
@@ -86,7 +87,9 @@ def kmp_table(W: str) -> list[int]:
     of `W` that is also a suffix of `W[:i+1]`.
     """
     pos: int = 1  # current position in W
-    cnd: int = 0  # zero-based index in W of the next character of current candidate string
+    cnd: int = (
+        0  # zero-based index in W of the next character of current candidate string
+    )
 
     T: list[int] = [0] * (len(W) + 1)
     T[0] = -1
@@ -119,25 +122,6 @@ def kmp_table(W: str) -> list[int]:
         T[pos] = cnd
 
     return T
-
-# Write a timer as a context manager
-
-@contextmanager
-def timer(label: str) -> Generator[Any, Any, Any]:
-    """
-    A context manager that prints the time taken to execute the code inside it.
-
-    Parameters
-    ----------
-    label : str
-        The label to print along with the time taken.
-    """
-    start = perf_counter_ns()
-    try:
-        yield
-    finally:
-        end = perf_counter_ns()
-        print(f"{label}: {(end - start) / 1e3:.3f} ms")
 
 
 if __name__ == "__main__":
