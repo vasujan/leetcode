@@ -1,82 +1,126 @@
+import inspect
 from pathlib import Path
-from collections import namedtuple
-from typing import Any, List
+from typing import Any, Callable, Iterable
 
-class LeetcodeTest:
-    TEST_FILE_NAME = "test_cases.txt"
-    TestCase = namedtuple("TestCase", ["inputs", "outputs"])
 
-    def __init__(self, solution_path: Path):
-        self.solution_path = solution_path
-
-    def generate_test_cases(self, file_path: Path) -> List[TestCase]:
-        """Generate test cases from a file.
-
-        The file is expected to contain input and output for each test case,
-        separated by a blank line. Each line of input is expected to contain
-        space-separated values, which will be converted to the appropriate type
-        (either int or str). The output is expected to be a single line, with
-        space-separated values that will be converted to str.
-
-        Args:
-            file_path (Path): The path to the file containing the test cases.
-
-        Returns:
-            A list of tuples, where each tuple contains the input and output
-            for a test case.
-        """
-        test_cases = []
-        with open(file_path, "r") as f:
-            lines = f.readlines()
-
-            for i in range(0, len(lines), 2):
-                input_line = lines[i].strip()
-                output_line = lines[i+1].strip()
-                inputs = [self.parse_string(x) for x in input_line.split()]
-                outputs = [self.parse_string(x) for x in output_line.split()]
-                test_cases.append(self.TestCase(inputs, outputs))
-        return test_cases
-
-    @staticmethod
-    def create_test_case_func(test_case, func):
-        inputs, outputs = test_case
-        def test_function(self):
-            result = [func(self, *inputs)]
-            self.assertEqual(result, outputs)
-        return test_function
-
-    @staticmethod
-    def parse_string(s: str) -> List[Any]:
-        # Create a function which takes in a string input which can either be
-        # string, integer, float and an array of these
-        # Like "abc", 4, 2.4, ["asdf", 14, 15.9]
-        # And returns a list of the same type
-        # Like ["abc", 4, 2.4, ["asdf", 14, 15.9]]
-        if s[0] == '[' and s[-1] == ']':
-            return [LeetcodeTest.parse_string(x) for x in s[1:-1].split(',')]
-        elif s[0] == '"' and s[-1] == '"':
-            return s[1:-1]
-        elif '.' in s:
-            return float(s)
-        elif s.isdigit():
-            return int(s)
-        elif s == 'null':
+def test_case_reader(
+    test_file_path: Path, func_signature: inspect.Signature | Callable | int
+):
+    def parse_value(raw: str) -> Any:
+        value = raw.strip()
+        if not value:
+            raise ValueError("Empty argument value in test file")
+        if value[0] == "[" and value[-1] == "]":
+            inner = value[1:-1].strip()
+            if not inner:
+                return []
+            return [parse_value(item) for item in inner.split(",")]
+        if value[0] == '"' and value[-1] == '"':
+            return value[1:-1]
+        if value == "null":
             return None
-        elif s.isalpha():
-            return str(s)
-        else:
-            raise ValueError(f"Invalid input: {s}")
+        try:
+            if "." in value:
+                return float(value)
+            return int(value)
+        except ValueError:
+            return value
 
-    def test_file_path(self, file_name: str = None):
-        if not file_name:
-            file_name = self.TEST_FILE_NAME
-        return self.solution_path / file_name
+    if isinstance(func_signature, inspect.Signature):
+        param_count = len(func_signature.parameters)
+    elif isinstance(func_signature, int):
+        param_count = func_signature
+    elif callable(func_signature):
+        param_count = len(inspect.signature(func_signature).parameters)
+    else:
+        raise TypeError("func_signature must be a signature, callable, or int")
 
-    def add_test_cases(
-        self, test_solution, solution, test_cases: List[TestCase]
+    raw_lines = [
+        line.strip() for line in test_file_path.read_text().splitlines() if line.strip()
+    ]
+
+    if param_count == 0:
+        raise ValueError("Function must have parameters to use test cases from file")
+
+    if len(raw_lines) % param_count != 0:
+        raise ValueError("Test case file does not align with function parameter count")
+
+    parsed_values = [parse_value(line) for line in raw_lines]
+    test_cases = []
+    for i in range(0, len(parsed_values), param_count):
+        test_cases.append(parsed_values[i : i + param_count])
+    return test_cases
+
+
+def test_case_writer(output_file_path: Path, outputs: Iterable[Any]) -> Path:
+    def serialize_value(value: Any) -> str:
+        if value is None:
+            return "null"
+        if isinstance(value, list) or isinstance(value, tuple):
+            inner = ",".join(serialize_value(item) for item in value)
+            return f"[{inner}]"
+        if isinstance(value, str):
+            return f'"{value}"'
+        return str(value)
+
+    lines = [serialize_value(output) for output in outputs]
+    output_file_path.write_text("\n".join(lines) + ("\n" if lines else ""))
+    return output_file_path
+
+
+class _TestSolutionMethod:
+    def __init__(
+        self,
+        func,
+        test_case_file: Path,
+        write_output: bool | Path,
+        run_tests: bool,
     ):
-        for i, test_case in enumerate(test_cases):
-            func = self.create_test_case_func(test_case, solution)
-            test_name = f"test_case_{i}"
-            setattr(test_solution, test_name, func)
+        self.func = func
+        self.test_case_file = test_case_file
+        self.write_output = write_output
+        self.run_tests = run_tests
+        self.signature = inspect.signature(func)
+        self.__name__ = func.__name__
+        self.__doc__ = func.__doc__
+        self.__qualname__ = func.__qualname__
+        self.__module__ = func.__module__
 
+    def __get__(self, instance, owner):
+        return self.func.__get__(instance, owner)
+
+    def __set_name__(self, owner, name):
+        run_name = "run"
+        run_specific_name = f"run_{name}"
+
+        def run(self_instance):
+            cases = test_case_reader(self.test_case_file, self.signature)
+            results = []
+            if self.run_tests:
+                bound = self.func.__get__(self_instance, owner)
+                for args in cases:
+                    results.append(bound(*args))
+            if self.write_output and self.run_tests:
+                output_path = (
+                    self.write_output
+                    if isinstance(self.write_output, Path)
+                    else self.test_case_file.with_name("solution.txt")
+                )
+                test_case_writer(output_path, results)
+            return results
+
+        if not hasattr(owner, run_specific_name):
+            setattr(owner, run_specific_name, run)
+        if not hasattr(owner, run_name):
+            setattr(owner, run_name, run)
+
+
+def test_solution(
+    test_case_file: Path,
+    write_output: bool | Path = False,
+    run_tests: bool = True,
+):
+    def decorator(func):
+        return _TestSolutionMethod(func, test_case_file, write_output, run_tests)
+
+    return decorator
