@@ -7,20 +7,22 @@ class TreeNode:
         self.right = right
 
     @classmethod
-    def construct_preorder(cls, arr: list):
-        # pre-order list to tree
-        root = None
-        q = []
-        root = cls(arr.pop(0))
-        q.append(root)
-        while q:
-            node = q.pop(0)
-            if arr:
-                node.left = cls(arr.pop(0))
-                q.append(node.left)
-            if arr:
-                node.right = cls(arr.pop(0))
-                q.append(node.right)
+    def construct_preorder(cls, values: list):
+        if not values:
+            return None
+
+        root = cls(values.pop(0))
+        queue = [root]
+
+        while queue:
+            current = queue.pop(0)
+            if values:
+                current.left = cls(values.pop(0))
+                queue.append(current.left)
+            if values:
+                current.right = cls(values.pop(0))
+                queue.append(current.right)
+
         return root
 
 
