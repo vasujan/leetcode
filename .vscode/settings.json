@@ -2,5 +2,10 @@
     "rust-analyzer.checkOnSave": false,
     "rust-analyzer.diagnostics.disabled": [
         "unlinked-file"
+    ],
+    "github.copilot.chat.commitMessageGeneration.instructions": [
+        {
+            "file": ".github/commit-message-instructions.md"
+        }
     ]
 }
