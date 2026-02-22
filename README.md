@@ -110,5 +110,3 @@
 - [3005_elem_max_freq](solutions/3005_elem_max_freq/)
 - [template](solutions/template/)
 <!-- solutions_end -->
-
-Extra text
