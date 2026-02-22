@@ -1,16 +1,20 @@
-# Write a function to update the README.md file with the list of all the solutions in the solutions folder. Every solutions folder has the README.md file which needs to be linked in the main readme file
+"""
+Write a function to update the README.md file with the list of all the solutions
+in the solutions folder. Every solutions folder has the README.md file which
+needs to be linked in the main readme file
+"""
 
-import os
 from pathlib import Path
-from typing import List
+
 
 def get_solutions():
     """Get the list of solutions in the solutions folder."""
     solutions = []
-    for solution in Path('solutions').iterdir():
+    for solution in Path("solutions").iterdir():
         if solution.is_dir():
             solutions.append(solution.name)
     return sorted(solutions)
+
 
 def update_readme():
     """Update the README.md file with the list of all the solutions in the solutions folder."""
@@ -28,7 +32,7 @@ def update_readme():
     start_line = None
     end_line = None
 
-    # find "<!-- solutions_start -->" in the readme file 
+    # find "<!-- solutions_start -->" in the readme file
     for i, line in enumerate(lines):
         if line.strip() == "<!-- solutions_start -->":
             start_line = i
@@ -38,16 +42,11 @@ def update_readme():
 
     # Write the string to the README.md file
     with open("README.md", "w") as f:
-        f.writelines(lines[:start_line + 1])
+        assert start_line is not None, "Start tag not found in README.md"
+        assert end_line is not None, "End tag not found in README.md"
+        f.writelines(lines[: start_line + 1])
         f.writelines(solutions_str)
         f.writelines(lines[end_line:])
-
-"""# Leetcode solutions
-
-Solutions to the Leetcode problems.
-
-[LeetCode - The World's Leading Online Programming Learning Platform](https://leetcode.com/problemset/)
-"""
 
 
 # Update the README.md file with the list of all the solutions in the solutions folder
