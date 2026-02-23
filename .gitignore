@@ -9,3 +9,7 @@ __pycache__
 
 # Rust
 /target
+
+# Dev
+test_case.txt
+test.ipynb
