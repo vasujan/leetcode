@@ -1,83 +1,35 @@
 import inspect
+import sys
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, Iterable, Self, TypeVar
+from typing import Any, Callable, Iterable, TypeVar
 
-import attrs
 import cattrs
+
+from .models import ListNode, TreeNode
 
 converter = cattrs.Converter()
 
 T = TypeVar("T", bound=int)
 
 
-@attrs.define
-class ListNode[T]:
-    val: T
-    next: Self | None = None
-
-    @classmethod
-    def from_list(cls, values: list[T]) -> Self | None:
-        if not values:
-            return None
-        ln = cls(values[0], None)
-        current = ln
-        for value in values[1:]:
-            current.next = cls(value, None)
-            current = current.next
-        return ln
-
-    def to_list(self) -> list[T]:
-        result = [self.val]
-        current = self
-        while current.next:
-            current = current.next
-            result.append(current.val)
-        return result
-
-    def __repr__(self):
-        next_repr = f"ListNode({self.next.val})" if self.next else "None"
-        return f"ListNode(val={self.val}, next={next_repr})"
+@contextmanager
+def push_pythonpath(path: Path | str):
+    if isinstance(path, str):
+        path = Path(path)
+    assert path.is_dir(), f"Provided path is not a directory: {path}"
+    original_pythonpath = sys.path.copy()
+    sys.path.insert(0, str(path.expanduser().absolute()))
+    try:
+        yield
+    finally:
+        sys.path = original_pythonpath
 
 
-@attrs.define
-class TreeNode[T]:
-    val: T
-    left: Self | None = None
-    right: Self | None = None
-
-    @classmethod
-    def from_list(cls, values: list[T]) -> Self | None:
-        if not values:
-            return None
-        root = cls(values[0], None, None)
-        queue = [root]
-        index = 1
-        while queue and index < len(values):
-            current = queue.pop(0)
-            if index < len(values) and values[index] is not None:
-                current.left = cls(values[index], None, None)
-                queue.append(current.left)
-            index += 1
-            if index < len(values) and values[index] is not None:
-                current.right = cls(values[index], None, None)
-                queue.append(current.right)
-            index += 1
-        return root
-
-    def to_list(self) -> list[T | None]:
-        result = []
-        queue = [self]
-        while queue:
-            current = queue.pop(0)
-            if current:
-                result.append(current.val)
-                queue.append(current.left) if current.left else result.append(None)
-                queue.append(current.right) if current.right else result.append(None)
-            else:
-                result.append(None)
-        while result and result[-1] is None:
-            result.pop()
-        return result
+converter.register_structure_hook(ListNode, lambda obj, _: ListNode.from_list(obj))
+converter.register_unstructure_hook(ListNode, lambda obj: obj.to_list())
+converter.register_structure_hook(TreeNode, lambda obj, _: TreeNode.from_list(obj))
+converter.register_unstructure_hook(TreeNode, lambda obj: obj.to_list())
 
 
 def parse_value(raw: str, typ: type) -> Any:
@@ -86,113 +38,135 @@ def parse_value(raw: str, typ: type) -> Any:
         raise ValueError("Empty argument value in test file")
     if value[0] == "[" and value[-1] == "]":
         value = value[1:-1].strip().split(",")
+    if value[0] == '"' and value[-1] == '"':
+        value = value[1:-1]
     if value == "null":
         return None
     return converter.structure(value, typ)
 
 
-def test_case_reader(
-    test_file_path: Path | str, func_signature: inspect.Signature | Callable
-):
+def serialize_value(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, list) or isinstance(value, tuple):
+        inner = ",".join(serialize_value(item) for item in value)
+        return f"[{inner}]"
+    if isinstance(value, str):
+        return f'"{value}"'
+    return str(value)
+
+
+def get_func_types(func: Callable) -> tuple[list[type], type | None]:
+    if not callable(func):
+        raise TypeError("func must be a callable to use test cases from file")
+
+    annotations = func.__annotations__
+    param_types = [v for k, v in annotations.items() if k != "return"]
+    return_type = annotations.get("return", None)
+    return param_types, return_type
+
+
+def get_test_case_parser_serializer(
+    func: Callable,
+) -> tuple[Callable[[list[str]], list[Any]], Callable[[Iterable[Any]], list[str]]]:
+    param_types, return_type = get_func_types(func)
+
+    def parser(raw_lines: list[str]) -> list[Any]:
+        if len(raw_lines) % len(param_types) != 0:
+            raise ValueError(
+                "Test case file does not align with function parameter count"
+            )
+        test_cases = []
+        for i in range(0, len(raw_lines), len(param_types)):
+            args = raw_lines[i : i + len(param_types)]
+            structured_args = [
+                parse_value(arg, typ) for arg, typ in zip(args, param_types)
+            ]
+            test_cases.append(structured_args)
+        return test_cases
+
+    def serializer(outputs: Iterable[Any]) -> list[str]:
+        return [serialize_value(output) for output in outputs]
+
+    return parser, serializer
+
+
+def read_text_file(test_file_path: Path | str) -> list[str]:
     if isinstance(test_file_path, str):
         test_file_path = Path(test_file_path)
-
-    if callable(func_signature):
-        func_signature = inspect.signature(func_signature)
-    if not isinstance(func_signature, inspect.Signature):
-        raise TypeError("func_signature must be a signature or callable")
-    param_count = len(func_signature.parameters)
-    if param_count == 0:
-        raise ValueError("Function must have parameters to use test cases from file")
-
+    assert test_file_path.is_file(), f"Test case file not found: {test_file_path}"
+    assert test_file_path.exists(), f"Test case file does not exist: {test_file_path}"
+    assert test_file_path.suffix in (".txt",), (
+        f"Unsupported test case file format: {test_file_path.suffix}"
+    )
     raw_lines = [
         line.strip() for line in test_file_path.read_text().splitlines() if line.strip()
     ]
-
-    if len(raw_lines) % param_count != 0:
-        raise ValueError("Test case file does not align with function parameter count")
-    test_cases = []
-
-    arg_types = [
-        v.annotation for k, v in func_signature.parameters.items() if k != "self"
-    ]
-
-    for i in range(0, len(raw_lines), param_count):
-        args = raw_lines[i : i + param_count]
-        structured_args = [parse_value(arg, typ) for arg, typ in zip(args, arg_types)]
-        test_cases.append(structured_args)
-    return test_cases
-
-
-def test_case_writer(output_file_path: Path, outputs: Iterable[Any]) -> Path:
-    def serialize_value(value: Any) -> str:
-        if value is None:
-            return "null"
-        if isinstance(value, list) or isinstance(value, tuple):
-            inner = ",".join(serialize_value(item) for item in value)
-            return f"[{inner}]"
-        if isinstance(value, str):
-            return f'"{value}"'
-        return str(value)
-
-    lines = [serialize_value(output) for output in outputs]
-    output_file_path.write_text("\n".join(lines) + ("\n" if lines else ""))
-    return output_file_path
-
-
-class _TestSolutionMethod:
-    def __init__(
-        self,
-        func,
-        test_case_file: Path,
-        write_output: bool | Path,
-        run_tests: bool,
-    ):
-        self.func = func
-        self.test_case_file = test_case_file
-        self.write_output = write_output
-        self.run_tests = run_tests
-        self.signature = inspect.signature(func)
-        self.__name__ = func.__name__
-        self.__doc__ = func.__doc__
-        self.__qualname__ = func.__qualname__
-        self.__module__ = func.__module__
-
-    def __get__(self, instance, owner):
-        return self.func.__get__(instance, owner)
-
-    def __set_name__(self, owner, name):
-        run_name = "run"
-        run_specific_name = f"run_{name}"
-
-        def run(self_instance):
-            cases = test_case_reader(self.test_case_file, self.signature)
-            results = []
-            if self.run_tests:
-                bound = self.func.__get__(self_instance, owner)
-                for args in cases:
-                    results.append(bound(*args))
-            if self.write_output and self.run_tests:
-                output_path = (
-                    self.write_output
-                    if isinstance(self.write_output, Path)
-                    else self.test_case_file.with_name("solution.txt")
-                )
-                test_case_writer(output_path, results)
-            return results
-
-        if not hasattr(owner, run_specific_name):
-            setattr(owner, run_specific_name, run)
-        if not hasattr(owner, run_name):
-            setattr(owner, run_name, run)
+    return raw_lines
 
 
 def test_solution(
-    test_case_file: Path,
-    write_output: bool | Path = False,
-    run_tests: bool = True,
-):
-    def decorator(func):
-        return _TestSolutionMethod(func, test_case_file, write_output, run_tests)
+    solution_dir: Path | str,
+    test_cases_file_name: str = "test_cases.txt",
+    method_name: str | None = None,
+    test_cases: list[Any] | None = None,
+    expected_outputs: list[Any] | None = None,
+    expected_outputs_file_name: str | None = None,
+    outputs_file_name: str | None = None,
+    correct_solution: Callable | None = None,
+) -> list[Any]:
+    if isinstance(solution_dir, str):
+        solution_dir = Path(solution_dir)
+    assert solution_dir.is_dir(), (
+        f"Provided solution directory is not a directory: {solution_dir}"
+    )
+    solution_dir = solution_dir.expanduser().absolute()
+    with push_pythonpath(solution_dir):
+        from solution import Solution  # type: ignore
 
-    return decorator
+    methods = inspect.getmembers(Solution, predicate=inspect.isfunction)
+    if len(methods) == 0:
+        raise ValueError("No methods found in Solution class")
+    if len(methods) > 1 and method_name is None:
+        raise ValueError(
+            "Multiple methods found in Solution class, unable to determine which one to test. Please specify method_name."
+        )
+
+    func = getattr(Solution, method_name) if method_name else methods[0][1]
+    print(f"Testing method: {func.__name__}{inspect.signature(func)}")
+
+    parser, serializer = get_test_case_parser_serializer(func)
+    if test_cases is None:
+        test_file_path = solution_dir / test_cases_file_name
+        assert test_file_path.is_file(), f"Test case file not found: {test_file_path}"
+        test_cases = parser(read_text_file(test_file_path))
+
+    if expected_outputs is None and expected_outputs_file_name is not None:
+        expected_outputs_file_path = solution_dir / expected_outputs_file_name
+        assert expected_outputs_file_path.is_file(), (
+            f"Expected outputs file not found: {expected_outputs_file_path}"
+        )
+        expected_outputs = parser(read_text_file(expected_outputs_file_path))
+
+    print("-" * 80)
+    results = []
+    for i, args in enumerate(test_cases):
+        print(f"Test case {i + 1}: {args}")
+        solution = Solution()
+        result = func(solution, *args)
+        results.append(result)
+        print(f"Output: {result}")
+        expected = None
+        if expected_outputs is not None:
+            expected = expected_outputs[i]
+        elif correct_solution is not None:
+            expected = correct_solution(*args)
+        if expected is not None and result != expected:
+            print(f"Failed: expected {expected}, got {result}")
+        print("-" * 80)
+
+    if outputs_file_name is not None:
+        outputs_file_path = solution_dir / outputs_file_name
+        outputs_file_path.write_text("\n".join(serializer(results)))
+
+    return results
