@@ -9,6 +9,11 @@ import cattrs
 from .models import ListNode, TreeNode
 
 converter = cattrs.Converter()
+converter.register_structure_hook(ListNode, lambda obj, _: ListNode.from_list(obj))
+converter.register_unstructure_hook(ListNode, lambda obj: obj.to_list())
+converter.register_structure_hook(TreeNode, lambda obj, _: TreeNode.from_list(obj))
+converter.register_unstructure_hook(TreeNode, lambda obj: obj.to_list())
+
 
 T = TypeVar("T", bound=int)
 
@@ -24,12 +29,6 @@ def push_pythonpath(path: Path | str):
         yield
     finally:
         sys.path = original_pythonpath
-
-
-converter.register_structure_hook(ListNode, lambda obj, _: ListNode.from_list(obj))
-converter.register_unstructure_hook(ListNode, lambda obj: obj.to_list())
-converter.register_structure_hook(TreeNode, lambda obj, _: TreeNode.from_list(obj))
-converter.register_unstructure_hook(TreeNode, lambda obj: obj.to_list())
 
 
 def parse_value(raw: str, typ: type) -> Any:
@@ -105,68 +104,140 @@ def read_text_file(test_file_path: Path | str) -> list[str]:
     return raw_lines
 
 
-def test_solution(
-    solution_dir: Path | str,
-    test_cases_file_name: str = "test_cases.txt",
-    method_name: str | None = None,
-    test_cases: list[Any] | None = None,
-    expected_outputs: list[Any] | None = None,
-    expected_outputs_file_name: str | None = None,
-    outputs_file_name: str | None = None,
-    correct_solution: Callable | None = None,
-) -> list[Any]:
-    if isinstance(solution_dir, str):
-        solution_dir = Path(solution_dir)
-    assert solution_dir.is_dir(), (
-        f"Provided solution directory is not a directory: {solution_dir}"
-    )
-    solution_dir = solution_dir.expanduser().absolute()
-    with push_pythonpath(solution_dir):
-        from solution import Solution  # type: ignore
+class SolutionTester:
+    def __init__(
+        self,
+        solution_dir: Path | str,
+        method_name: str | None = None,
+        test_cases_file_name: str = "test_cases.txt",
+        expected_outputs_file_name: str = "expected_outputs.txt",
+        outputs_file_name: str | None = None,
+        correct_solution: Callable | None = None,
+    ):
+        if isinstance(solution_dir, str):
+            solution_dir = Path(solution_dir)
+        assert solution_dir.is_dir(), (
+            f"Provided solution directory is not a directory: {solution_dir}"
+        )
+        self.solution_dir = solution_dir.expanduser().absolute()
+        self.method_name = method_name
+        self.test_cases_file_name = test_cases_file_name
+        self.expected_outputs_file_name = expected_outputs_file_name
+        self.outputs_file_name = outputs_file_name
+        self.correct_solution = correct_solution
 
-    methods = inspect.getmembers(Solution, predicate=inspect.isfunction)
-    if len(methods) == 0:
-        raise ValueError("No methods found in Solution class")
-    if len(methods) > 1 and method_name is None:
-        raise ValueError(
-            "Multiple methods found in Solution class, unable to determine which one to test. Please specify method_name."
+    def _load_solution_class(self) -> type:
+        with push_pythonpath(self.solution_dir):
+            from solution import Solution  # type: ignore
+        return Solution
+
+    def _get_solution_method(self, Solution: type) -> Callable:
+        methods = inspect.getmembers(Solution, predicate=inspect.isfunction)
+        if len(methods) == 0:
+            raise ValueError("No methods found in Solution class")
+        if len(methods) > 1 and self.method_name is None:
+            raise ValueError(
+                "Multiple methods found in Solution class, unable to determine which one to test. Please specify method_name."
+            )
+        return (
+            getattr(Solution, self.method_name) if self.method_name else methods[0][1]
         )
 
-    func = getattr(Solution, method_name) if method_name else methods[0][1]
-    print(f"Testing method: {func.__name__}{inspect.signature(func)}")
-
-    parser, serializer = get_test_case_parser_serializer(func)
-    if test_cases is None:
-        test_file_path = solution_dir / test_cases_file_name
+    def _load_test_cases(
+        self,
+        parser: Callable[[list[str]], list[Any]],
+        provided_test_cases: list[Any] | None,
+    ) -> list[Any]:
+        if provided_test_cases is not None:
+            return provided_test_cases
+        test_file_path = self.solution_dir / self.test_cases_file_name
         assert test_file_path.is_file(), f"Test case file not found: {test_file_path}"
-        test_cases = parser(read_text_file(test_file_path))
+        return parser(read_text_file(test_file_path))
 
-    if expected_outputs is None and expected_outputs_file_name is not None:
-        expected_outputs_file_path = solution_dir / expected_outputs_file_name
-        assert expected_outputs_file_path.is_file(), (
-            f"Expected outputs file not found: {expected_outputs_file_path}"
-        )
-        expected_outputs = parser(read_text_file(expected_outputs_file_path))
+    def _load_expected_outputs(
+        self,
+        parser: Callable[[list[str]], list[Any]],
+        provided_expected_outputs: list[Any] | None,
+    ) -> list[Any] | None:
+        if provided_expected_outputs is not None:
+            return provided_expected_outputs
+        expected_outputs_file_path = self.solution_dir / self.expected_outputs_file_name
+        if not expected_outputs_file_path.exists():
+            return None
+        return parser(read_text_file(expected_outputs_file_path))
 
-    print("-" * 80)
-    results = []
-    for i, args in enumerate(test_cases):
-        print(f"Test case {i + 1}: {args}")
+    def _run_single_test(
+        self,
+        Solution: type,
+        func: Callable,
+        args: list[Any],
+        expected_output: Any | None,
+    ) -> tuple[Any, bool]:
         solution = Solution()
         result = func(solution, *args)
-        results.append(result)
-        print(f"Output: {result}")
-        expected = None
-        if expected_outputs is not None:
-            expected = expected_outputs[i]
-        elif correct_solution is not None:
-            expected = correct_solution(*args)
-        if expected is not None and result != expected:
-            print(f"Failed: expected {expected}, got {result}")
-        print("-" * 80)
+        passed = expected_output is None or result == expected_output
+        return result, passed
 
-    if outputs_file_name is not None:
-        outputs_file_path = solution_dir / outputs_file_name
+    def _write_outputs(
+        self, serializer: Callable[[Iterable[Any]], list[str]], results: list[Any]
+    ) -> None:
+        if self.outputs_file_name is None:
+            return
+        outputs_file_path = self.solution_dir / self.outputs_file_name
         outputs_file_path.write_text("\n".join(serializer(results)))
 
-    return results
+    def run(
+        self,
+        test_cases: list[Any] | None = None,
+        expected_outputs: list[Any] | None = None,
+        printer: Callable[[str], None] = print,
+    ) -> list[Any]:
+        Solution = self._load_solution_class()
+        func = self._get_solution_method(Solution)
+
+        func_name = getattr(func, "__name__", repr(func))
+        printer(f"Testing method: {func_name}{inspect.signature(func)}")
+
+        parser, serializer = get_test_case_parser_serializer(func)
+        test_cases = self._load_test_cases(parser, test_cases)
+        expected_outputs = self._load_expected_outputs(parser, expected_outputs)
+        if expected_outputs is not None:
+            printer(f"Loaded {len(expected_outputs)} expected outputs for comparison")
+
+        if expected_outputs is not None:
+            assert len(test_cases) == len(expected_outputs), (
+                "Number of test cases does not match number of expected outputs"
+            )
+
+        _, return_type = get_func_types(func)
+        assert return_type is not None, (
+            "Function must have a return type annotation for testing with expected outputs"
+        )
+
+        printer("-" * 80)
+        results = []
+        for i, args in enumerate(test_cases):
+            printer(f"Test case {i + 1}: {args}")
+
+            if expected_outputs is not None:
+                expected = (
+                    expected_outputs[i][0]
+                    if isinstance(expected_outputs[i], (list, tuple))
+                    else expected_outputs[i]
+                )
+                expected = converter.structure(expected, return_type)
+            elif self.correct_solution is not None:
+                expected = self.correct_solution(*args)
+            else:
+                expected = None
+
+            result, passed = self._run_single_test(Solution, func, args, expected)
+            results.append(result)
+
+            printer(f"Output: {result}")
+            if not passed:
+                printer(f"Failed: expected {expected}, got {result}")
+            printer("-" * 80)
+
+        self._write_outputs(serializer, results)
+        return results
