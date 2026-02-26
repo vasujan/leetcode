@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+current_branch="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "$current_branch" != "main" ]]; then
+  exit 0
+fi
+
+run_update=false
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$local_sha" == "0000000000000000000000000000000000000000" ]]; then
+    continue
+  fi
+
+  if [[ "$remote_sha" == "0000000000000000000000000000000000000000" ]]; then
+    range="$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+
+  for commit in $(git rev-list "$range"); do
+    subject="$(git log -1 --format=%s "$commit")"
+    if printf '%s\n' "$subject" | grep -Eq '^feat\([0-9]{4}[^)]*\):'; then
+      run_update=true
+      break 2
+    fi
+  done
+done
+
+if [[ "$run_update" != "true" ]]; then
+  exit 0
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv is required to run scripts/update_readme.py. Please install uv." >&2
+  exit 1
+fi
+
+uv run python scripts/update_readme.py
+
+if ! git diff --quiet -- README.md; then
+  echo "README.md updated by scripts/update_readme.py. Please commit and retry push." >&2
+  exit 1
+fi
+
+exit 0
